@@ -1,0 +1,91 @@
+services:
+  mysql:
+    image: mysql:latest
+    environment:
+      MYSQL_ROOT_PASSWORD: 123456
+      #MYSQL_DATABASE: clientdb,voituredb
+    ports:
+      - "3306:3306"
+  controle-discovery-service:
+    container_name: controle-discovery-service
+    build: ./eureka-server
+    ports:
+      - "8761:8761"
+    expose:
+      - "8761"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      retries: 3
+  controle-client-service:
+    container_name: controle-client-service
+    build: ./ClientService
+    ports:
+      - "8081:8081"
+    expose:
+      - "8081"
+
+    depends_on:
+      controle-discovery-service:
+        condition: service_healthy
+      mysql:
+        condition: service_started
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/clientdb?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 123456
+      DISCOVERY_SERVICE_URL: http://controle-discovery-service:8761/eureka/
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 10s
+      retries: 3
+
+
+  controle-voiture-service:
+    container_name: controle-voiture-service
+    build: ./carservice
+    ports:
+      - "8082:8082"
+    expose:
+      - "8082"
+
+    depends_on:
+      controle-discovery-service:
+        condition: service_healthy
+      mysql:
+        condition: service_started
+      controle-client-service:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/voituredb?createDatabaseIfNotExist=true
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: 123456
+      DISCOVERY_SERVICE_URL: http://controle-discovery-service:8761/eureka/
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 10s
+      retries: 3
+
+  controle-gateway-service:
+    container_name: controle-gateway-service
+    build: ./apigetway
+    ports:
+      - "8888:8888"
+    expose:
+      - "8888"
+    depends_on:
+      controle-discovery-service:
+        condition: service_healthy
+    environment:
+      DISCOVERY_SERVICE_URL: http://controle-discovery-service:8761/eureka/
+
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      MYSQL_ROOT_PASSWORD: 123456
+    ports:
+      - "8090:80"
+
